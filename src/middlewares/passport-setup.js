@@ -3,7 +3,7 @@ const passport = require("passport");
 const {
   facebookAppId,
   facebookAppSecret,
-  apiUrl,
+  backendUrl,
   twitterKey,
   twitterSecret,
 } = require("../config");
@@ -30,7 +30,7 @@ passport.use(
       clientID: facebookAppId,
       clientSecret: facebookAppSecret,
       // Set the callback URL for Facebook authentication
-      callbackURL: `${apiUrl}/apis/auth/facebook/callback`,
+      callbackURL: `${backendUrl}/apis/auth/facebook/callback`,
       // Specify the permissions we're requesting from the user
       scope: [
         "email",
@@ -61,7 +61,7 @@ passport.use(
     {
       consumerKey: twitterKey,
       consumerSecret: twitterSecret,
-      callbackURL: `${apiUrl}/apis/auth/twitter/callback`,
+      callbackURL: `${backendUrl}/apis/auth/twitter/callback`,
     },
     function (token, tokenSecret, profile, done) {
       profile.token = token;
