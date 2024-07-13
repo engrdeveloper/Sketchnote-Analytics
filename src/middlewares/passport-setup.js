@@ -1,7 +1,14 @@
 // Set up Passport.js for Facebook authentication
 const passport = require("passport");
-const { facebookAppId, facebookAppSecret, backendUrl } = require("../config");
+const {
+  facebookAppId,
+  facebookAppSecret,
+  apiUrl,
+  twitterKey,
+  twitterSecret,
+} = require("../config");
 const FacebookStrategy = require("passport-facebook").Strategy;
+const TwitterStrategy = require("passport-twitter").Strategy;
 
 // Facebook permissions required for posting to a page:
 // https://developers.facebook.com/docs/pages-api/posts/
@@ -15,10 +22,6 @@ const FacebookStrategy = require("passport-facebook").Strategy;
 // - pages_read_user_content
 // - pages_show_list
 
-// instagram_basic depends on :
-// - pages_read_engagement
-// - pages_show_list
-
 // Configure Passport.js to use the Facebook strategy
 passport.use(
   new FacebookStrategy(
@@ -27,7 +30,7 @@ passport.use(
       clientID: facebookAppId,
       clientSecret: facebookAppSecret,
       // Set the callback URL for Facebook authentication
-      callbackURL: `${backendUrl}/apis/auth/facebook/callback`,
+      callbackURL: `${apiUrl}/apis/auth/facebook/callback`,
       // Specify the permissions we're requesting from the user
       scope: [
         "email",
@@ -47,6 +50,22 @@ passport.use(
       // Here, you can use the profile info (mainly profile id) to check if the user is registered in your db
       // and decide whether to create a new user or return the existing user.
       profile.accessToken = accessToken;
+      return done(null, profile);
+    }
+  )
+);
+
+// Configure passport.js to use the twitter strategy
+passport.use(
+  new TwitterStrategy(
+    {
+      consumerKey: twitterKey,
+      consumerSecret: twitterSecret,
+      callbackURL: `${apiUrl}/apis/auth/twitter/callback`,
+    },
+    function (token, tokenSecret, profile, done) {
+      profile.token = token;
+      profile.tokenSecret = tokenSecret;
       return done(null, profile);
     }
   )

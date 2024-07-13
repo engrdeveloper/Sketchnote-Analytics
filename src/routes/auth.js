@@ -21,4 +21,25 @@ router.get(
   }
 );
 
+// Initiate the twitter authentication process
+router.get("/twitter", passport.authenticate("twitter"));
+
+// Handle the callback from twitter
+// If authentication is successful, redirect to the main page
+// If authentication fails, redirect to the login page
+router.get(
+  "/twitter/callback",
+  passport.authenticate("twitter"),
+  (req, res) => {
+    const profile = req.user;
+    res.send({
+      id: profile.id,
+      username: profile.username,
+      displayName: profile.displayName,
+      token: profile.token,
+      tokenSecret: profile.tokenSecret,
+    });
+  }
+);
+
 module.exports = router;
