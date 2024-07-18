@@ -58,6 +58,10 @@ app.use("/apis/instagram", require("./src/routes/instagram"));
 // Routes for handling twitter posting
 app.use("/apis/twitter", require("./src/routes/twitter"));
 
+// Routes for handling google login
+app.use("/apis/google", require("./src/routes/google"));
+
+
 // Start the server and listen on the specified port
 app.listen(port, (err) => {
   // Log an error if there was an error in server setup

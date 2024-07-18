@@ -8,4 +8,7 @@ module.exports = {
   facebookAppSecret: process.env.FACEBOOK_APP_SECRET,
   twitterKey: process.env.TWITTER_KEY,
   twitterSecret: process.env.TWITTER_SECRET,
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI,
 };
