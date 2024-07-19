@@ -15,7 +15,7 @@ const {
   fetchSingleAdsGroupDetails,
   fetchAllAdsAgainstCustomer,
   fetchAdAgainstAdId,
-} = require("../controllers/googleAdsApi");
+} = require("../controllers/googleAdsApi_v17");
 
 // Initialize OAuth2Client with your credentials
 const oauth2Client = new OAuth2Client({
