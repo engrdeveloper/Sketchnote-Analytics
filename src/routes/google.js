@@ -60,27 +60,27 @@ router.get("/auth/callback", async (req, res) => {
 });
 
 // Fetch all customer google ads
-router.get("/customers", fetchAllGoogleAdsCustomers);
+router.post("/customers", fetchAllGoogleAdsCustomers);
 
 // Fetch single cusotmer detail
-router.get("/single-customer", fetchCustomerDetails);
+router.post("/single-customer", fetchCustomerDetails);
 
 // Fetch compaigns against customer
-router.get("/customer/compaigns", getAllCompaignsAgainstCustomer);
+router.post("/customer/compaigns", getAllCompaignsAgainstCustomer);
 
 // Fetch metrics against single compaign
-router.get("/single-compaign-metrics", getMetricsAgainstSingleCompaign);
+router.post("/single-compaign-metrics", getMetricsAgainstSingleCompaign);
 
 // Fetch all Ads Group
-router.get("/ads-groups", fetchAllAdsGroupsAgainstCustomer);
+router.post("/ads-groups", fetchAllAdsGroupsAgainstCustomer);
 
 // Fetch single Ads Group
-router.get("/single-ads-group-metrics", fetchSingleAdsGroupDetails);
+router.post("/single-ads-group-metrics", fetchSingleAdsGroupDetails);
 
 // Fetch all ads
-router.get("/fetch-all-ads", fetchAllAdsAgainstCustomer);
+router.post("/fetch-all-ads", fetchAllAdsAgainstCustomer);
 
 // Fetch single ad
-router.get("/fetch-single-ad", fetchAdAgainstAdId);
+router.post("/fetch-single-ad", fetchAdAgainstAdId);
 
 module.exports = router;
