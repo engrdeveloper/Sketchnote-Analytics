@@ -45,6 +45,7 @@ exports.fetchAllGoogleAdsCustomers = async (req, res) => {
   }
 };
 
+// https://developers.google.com/google-ads/api/fields/v16/campaign
 const campaignCompulsoryMetrics = `
     metrics.all_conversions_value, metrics.all_conversions_from_click_to_call, 
     metrics.cost_per_all_conversions, metrics.value_per_all_conversions, 
@@ -80,9 +81,11 @@ exports.getAllCompaignsAgainstCustomer = async (req, res) => {
     const { customerRefreshToken, customerId } = req.body;
 
     // Check if the customer refresh token is provided.
-    if (!customerRefreshToken) {
+    if (!customerRefreshToken || !customerId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "Customer Refresh Token is required" });
+      res
+        .status(400)
+        .json({ message: "Customer Refresh Token and ID is required" });
       return;
     }
 
@@ -108,6 +111,7 @@ exports.getAllCompaignsAgainstCustomer = async (req, res) => {
 /**
  * Fetches metrics against a single campaign.
  *
+ * https://developers.google.com/google-ads/api/fields/v16/campaign
  * @param {Object} req - The request object.
  * @param {Object} req.body - The request body.
  * @param {string} req.body.customerRefreshToken - The customer's refresh token.
@@ -123,7 +127,11 @@ exports.getMetricsAgainstSingleCompaign = async (req, res) => {
     // Check if all required parameters are provided.
     if (!customerRefreshToken || !customerId || !campaignId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "All fields are required" });
+      res
+        .status(400)
+        .json({
+          message: "Customer Refresh Token, ID and Campaign ID is required",
+        });
       return;
     }
 
@@ -146,6 +154,7 @@ exports.getMetricsAgainstSingleCompaign = async (req, res) => {
   }
 };
 
+// https://developers.google.com/google-ads/api/fields/v16/ad_group
 const adsGroupCompulsoryMetrics = `
     metrics.all_conversions_value, metrics.cost_per_all_conversions, metrics.value_per_all_conversions, 
     metrics.all_conversions, metrics.average_cost, metrics.average_cpm, metrics.average_cpv, 
@@ -180,7 +189,9 @@ exports.fetchAllAdsGroupsAgainstCustomer = async (req, res) => {
     // Check if the customer refresh token and ID are provided.
     if (!customerRefreshToken || !customerId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "All fields are required" });
+      res
+        .status(400)
+        .json({ message: "Customer Refresh Token and ID is required" });
       return;
     }
 
@@ -206,6 +217,7 @@ exports.fetchAllAdsGroupsAgainstCustomer = async (req, res) => {
 /**
  * Fetches details of a single Ad Group against a customer.
  *
+ * https://developers.google.com/google-ads/api/fields/v16/ad_group
  * @param {Object} req - The request object.
  * @param {Object} req.body - The request body.
  * @param {string} req.body.customerRefreshToken - The customer's refresh token.
@@ -222,7 +234,12 @@ exports.fetchSingleAdsGroupDetails = async (req, res) => {
     // Check if all the required parameters are provided.
     if (!customerRefreshToken || !customerId || !adGroupId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "All fields are required" });
+      res
+        .status(400)
+        .json({
+          message:
+            "Customer Refresh Token, Customer ID and Ad Group ID is required",
+        });
       return;
     }
 
@@ -245,6 +262,7 @@ exports.fetchSingleAdsGroupDetails = async (req, res) => {
   }
 };
 
+// https://developers.google.com/google-ads/api/fields/v16/ad_group_ad
 const allAdsCompulsoryMtrics = `
     metrics.all_conversions_value, 
     metrics.cost_per_all_conversions, metrics.value_per_all_conversions, 
@@ -278,7 +296,9 @@ exports.fetchAllAdsAgainstCustomer = async (req, res) => {
     // Check if all the required parameters are provided.
     if (!customerRefreshToken || !customerId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "All fields are required" });
+      res
+        .status(400)
+        .json({ message: "Customer Refresh Token and ID is required" });
       return;
     }
 
@@ -304,6 +324,7 @@ exports.fetchAllAdsAgainstCustomer = async (req, res) => {
 /**
  * Fetches an Ad against an Ad ID.
  *
+ * https://developers.google.com/google-ads/api/fields/v16/ad_group_ad
  * @param {Object} req - The request object.
  * @param {Object} req.body - The request body.
  * @param {string} req.body.customerRefreshToken - The customer's refresh token.
@@ -320,7 +341,11 @@ exports.fetchAdAgainstAdId = async (req, res) => {
     // Check if all the required parameters are provided.
     if (!customerRefreshToken || !customerId || !adId) {
       // If not, return a 400 Bad Request response.
-      res.status(400).json({ message: "All fields are required" });
+      res
+        .status(400)
+        .json({
+          message: "Customer Refresh Token, Customer ID and Ad ID is required",
+        });
       return;
     }
 
