@@ -16,6 +16,9 @@ const {
   fetchAllAdsAgainstCustomer,
   fetchAdAgainstAdId,
   fetchCustomerDetails,
+  getMetricsAgainstMultipleCompaigns,
+  fetcchMultipleAdsgroupMetrics,
+  fetchMultipleAds,
 } = require("../controllers/googleAdsApi_v17");
 
 // Initialize OAuth2Client with your credentials
@@ -71,16 +74,25 @@ router.post("/customer/compaigns", getAllCompaignsAgainstCustomer);
 // Fetch metrics against single compaign
 router.post("/single-compaign-metrics", getMetricsAgainstSingleCompaign);
 
+// Fetch metrics against multiple compaign
+router.post("/multiple-compaign-metrics", getMetricsAgainstMultipleCompaigns);
+
 // Fetch all Ads Group
 router.post("/ads-groups", fetchAllAdsGroupsAgainstCustomer);
 
 // Fetch single Ads Group
 router.post("/single-ads-group-metrics", fetchSingleAdsGroupDetails);
 
+// Fetch multiple Ads Group
+router.post("/multiple-ads-group-metrics", fetcchMultipleAdsgroupMetrics);
+
 // Fetch all ads
 router.post("/fetch-all-ads", fetchAllAdsAgainstCustomer);
 
 // Fetch single ad
 router.post("/fetch-single-ad", fetchAdAgainstAdId);
+
+// Fetch multiple ads
+router.post("/fetch-multiple-ads", fetchMultipleAds);
 
 module.exports = router;

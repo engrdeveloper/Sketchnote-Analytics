@@ -255,6 +255,60 @@ exports.getMetricsAgainstSingleCompaign = async (req, res) => {
   }
 };
 
+/**
+ * Retrieves metrics against multiple campaigns.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} - Returns the fetched metrics in the response.
+ */
+exports.getMetricsAgainstMultipleCompaigns = async (req, res) => {
+  try {
+    const { customerRefreshToken, customerId, campaignIds } = req.body;
+
+    // Check if all required parameters are provided.
+    if (!customerRefreshToken || !customerId || !campaignIds) {
+      // If not, return a 400 Bad Request response.
+      res.status(400).json({
+        message: "Customer Refresh Token, ID and Campaign ID is required",
+      });
+      return;
+    }
+
+    // Fetch the latest access token.
+    const token = await fetchLatestAccessToken(customerRefreshToken);
+
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${campaignCompulsoryMetrics}, campaign.id, campaign.name FROM campaign WHERE campaign.id IN (${campaignIds})`;
+
+    // Date Format should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
+    // Fetch metrics against the campaign.
+    const response = await googleAdsApiBaseUrl.post(
+      `/customers/${customerId}/googleAds:search`,
+      {
+        query,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "developer-token": googleDeveloperToken,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // Return the fetched metrics in the response.
+    res.json(response?.data?.results);
+  } catch (error) {
+    res.status(500).json(error);
+  }
+};
+
 // https://developers.google.com/google-ads/api/fields/v17/ad_group
 const adsGroupCompulsoryMetrics = `
     metrics.all_conversions_value, metrics.cost_per_all_conversions, metrics.value_per_all_conversions, 
@@ -393,6 +447,67 @@ exports.fetchSingleAdsGroupDetails = async (req, res) => {
   }
 };
 
+/**
+ * Fetches multiple Ad Group metrics against a customer.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} req.body - The request body.
+ * @param {string} req.body.customerRefreshToken - The customer's refresh token.
+ * @param {string} req.body.customerId - The customer's ID.
+ * @param {Array} req.body.adGroupIds - The IDs of the Ad Groups.
+ * @param {Object} res - The response object.
+ * @returns {Promise<Object>} - A promise that resolves to the response data.
+ */
+exports.fetcchMultipleAdsgroupMetrics = async (req, res) => {
+  try {
+    // Extract the necessary parameters from the request body.
+    const { customerRefreshToken, customerId, adGroupIds } = req.body;
+
+    // Check if all the required parameters are provided.
+    if (!customerRefreshToken || !customerId || !adGroupIds) {
+      // If not, return a 400 Bad Request response.
+      res.status(400).json({
+        message:
+          "Customer Refresh Token, Customer ID and Ad Group ID is required",
+      });
+      return;
+    }
+
+    // Fetch the latest access token.
+    const token = await fetchLatestAccessToken(customerRefreshToken);
+
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${adsGroupCompulsoryMetrics}, ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id IN (${adGroupIds})`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
+    // Fetch multiple Ad Group metrics.
+    const response = await googleAdsApiBaseUrl.post(
+      `/customers/${customerId}/googleAds:search`,
+      {
+        query,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "developer-token": googleDeveloperToken,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // Return the fetched metrics in the response.
+    res.json(response?.data?.results);
+  } catch (error) {
+    // If an error occurs, return a 500 Internal Server Error response.
+    res.status(500).json(error);
+  }
+};
+
 // https://developers.google.com/google-ads/api/fields/v17/ad_group_ad
 const allAdsCompulsoryMtrics = `
     metrics.all_conversions_value, 
@@ -507,6 +622,67 @@ exports.fetchAdAgainstAdId = async (req, res) => {
     }
 
     // Fetch single ad by id
+    const response = await googleAdsApiBaseUrl.post(
+      `/customers/${customerId}/googleAds:search`,
+      {
+        query: query,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "developer-token": googleDeveloperToken,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // Return the fetched metrics in the response.
+    res.json(response?.data?.results);
+  } catch (error) {
+    // If an error occurs, return a 500 Internal Server Error response.
+    res.status(500).json(error);
+  }
+};
+
+/**
+ * Fetches multiple Ad metrics against a customer.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} req.body - The request body.
+ * @param {string} req.body.customerRefreshToken - The customer's refresh token.
+ * @param {string} req.body.customerId - The customer's ID.
+ * @param {Array} req.body.adIds - The IDs of the Ads.
+ * @param {Object} res - The response object.
+ * @returns {Promise<Object>} - A promise that resolves to the response data.
+ */
+exports.fetchMultipleAds = async (req, res) => {
+  try {
+    // Extract the necessary parameters from the request body.
+    const { customerRefreshToken, customerId, adIds } = req.body;
+
+    // Check if all the required parameters are provided.
+    if (!customerRefreshToken || !customerId || !adIds) {
+      // If not, return a 400 Bad Request response.
+      res.status(400).json({
+        message: "Customer Refresh Token, Customer ID and Ad ID is required",
+      });
+      return;
+    }
+
+    // Fetch the latest access token.
+    const token = await fetchLatestAccessToken(customerRefreshToken);
+
+    // Construct the query to fetch multiple Ads.
+    let query = `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id,ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE ad_group_ad.ad.id  IN (${adIds})`;
+
+    const { dateFilter } = req.body;
+
+    // Apply date filter if provided.
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
+    // Fetch multiple Ads by customer id.
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
