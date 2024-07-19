@@ -66,6 +66,57 @@ exports.fetchAllGoogleAdsCustomers = async (req, res) => {
   }
 };
 
+/**
+ * Fetches the details of a specific Google Ads customer.
+ *
+ * https://developers.google.com/google-ads/api/fields/v17/customer_query_builder
+ * @param {Object} req - The request object.
+ * @param {Object} req.body - The request body.
+ * @param {string} req.body.customerId - The ID of the customer.
+ * @param {string} req.body.customerRefreshToken - The refresh token of the customer.
+ * @param {Object} res - The response object.
+ * @returns {Promise<Object>} - A promise that resolves to the customer details.
+ * @throws {Error} - If there is an error fetching the customer details.
+ */
+exports.fetchCustomerDetails = async (req, res) => {
+  try {
+    // Extract the customer ID and refresh token from the request body.
+    const { customerId, customerRefreshToken } = req.body;
+
+    // Check if both the customer ID and refresh token are provided.
+    if (!customerId || !customerRefreshToken) {
+      // If not, return a 400 Bad Request response.
+      res
+        .status(400)
+        .json({ message: "Customer ID and Refresh Token are required" });
+      return;
+    }
+
+    // Fetch the latest access token.
+    const token = await fetchLatestAccessToken(customerRefreshToken);
+
+    const response = await googleAdsApiBaseUrl.post(
+      `/customers/${customerId}/googleAds:search`,
+      {
+        query: `SELECT customer.id, customer.manager, customer.status,customer.resource_name, customer.descriptive_name FROM customer WHERE customer.id = ${customerId}`,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "developer-token": googleDeveloperToken,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // Return the fetched customer details in the response.
+    return res.json(response?.data?.results);
+  } catch (error) {
+    // If an error occurs, return a 500 Internal Server Error response.
+    res.status(500).json(error);
+  }
+};
+
 // https://developers.google.com/google-ads/api/fields/v17/campaign
 const campaignCompulsoryMetrics = `
     metrics.all_conversions_value, metrics.all_conversions_from_click_to_call, 

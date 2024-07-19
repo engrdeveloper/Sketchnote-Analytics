@@ -15,6 +15,7 @@ const {
   fetchSingleAdsGroupDetails,
   fetchAllAdsAgainstCustomer,
   fetchAdAgainstAdId,
+  fetchCustomerDetails,
 } = require("../controllers/googleAdsApi_v17");
 
 // Initialize OAuth2Client with your credentials
@@ -60,6 +61,9 @@ router.get("/auth/callback", async (req, res) => {
 
 // Fetch all customer google ads
 router.get("/customers", fetchAllGoogleAdsCustomers);
+
+// Fetch single cusotmer detail
+router.get("/single-customer", fetchCustomerDetails);
 
 // Fetch compaigns against customer
 router.get("/customer/compaigns", getAllCompaignsAgainstCustomer);
