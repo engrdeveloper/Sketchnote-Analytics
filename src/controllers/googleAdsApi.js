@@ -300,3 +300,44 @@ exports.fetchAllAdsAgainstCustomer = async (req, res) => {
     res.status(500).json(error);
   }
 };
+
+/**
+ * Fetches an Ad against an Ad ID.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} req.body - The request body.
+ * @param {string} req.body.customerRefreshToken - The customer's refresh token.
+ * @param {string} req.body.customerId - The customer's ID.
+ * @param {string} req.body.adId - The Ad's ID.
+ * @param {Object} res - The response object.
+ * @returns {Promise<Object>} - A promise that resolves to the response data.
+ */
+exports.fetchAdAgainstAdId = async (req, res) => {
+  try {
+    // Extract the necessary parameters from the request body.
+    const { customerRefreshToken, customerId, adId } = req.body;
+
+    // Check if all the required parameters are provided.
+    if (!customerRefreshToken || !customerId || !adId) {
+      // If not, return a 400 Bad Request response.
+      res.status(400).json({ message: "All fields are required" });
+      return;
+    }
+
+    // Create a customer object using the provided customer ID and refresh token.
+    const customer = client.Customer({
+      customer_id: customerId,
+      refresh_token: customerRefreshToken,
+    });
+
+    // Fetch the Ad against the Ad ID.
+    const query = `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE ad_group_ad.ad.id = ${adId}`;
+    const groups = await customer.query(query);
+
+    // Return the fetched Ad in the response.
+    res.json(groups);
+  } catch (error) {
+    // If an error occurs, return a 500 Internal Server Error response.
+    res.status(500).json(error);
+  }
+};

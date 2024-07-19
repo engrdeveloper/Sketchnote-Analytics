@@ -14,6 +14,7 @@ const {
   fetchAllAdsGroupsAgainstCustomer,
   fetchSingleAdsGroupDetails,
   fetchAllAdsAgainstCustomer,
+  fetchAdAgainstAdId,
 } = require("../controllers/googleAdsApi");
 
 // Initialize OAuth2Client with your credentials
@@ -74,5 +75,8 @@ router.get("/single-ads-group-metrics", fetchSingleAdsGroupDetails);
 
 // Fetch all ads
 router.get("/fetch-all-ads", fetchAllAdsAgainstCustomer);
+
+// Fetch single ad
+router.get("/fetch-single-ad", fetchAdAgainstAdId);
 
 module.exports = router;
