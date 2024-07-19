@@ -164,11 +164,20 @@ exports.getAllCompaignsAgainstCustomer = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${campaignCompulsoryMetrics}, campaign.id, campaign.name FROM campaign`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} WHERE segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
     // Fetch all campaigns against a customer.
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
-        query: `SELECT ${campaignCompulsoryMetrics}, campaign.id, campaign.name FROM campaign`,
+        query,
       },
       {
         headers: {
@@ -214,11 +223,20 @@ exports.getMetricsAgainstSingleCompaign = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${campaignCompulsoryMetrics}, campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
     // Fetch metrics against the campaign.
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
-        query: `SELECT ${campaignCompulsoryMetrics}, campaign.id, campaign.name FROM campaign WHERE campaign.id = ${campaignId}`,
+        query,
       },
       {
         headers: {
@@ -281,11 +299,20 @@ exports.fetchAllAdsGroupsAgainstCustomer = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${adsGroupCompulsoryMetrics}, ad_group.id, ad_group.name FROM ad_group WHERE customer.id = ${customerId}`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
     // Fetch all Ad Groups against the customer.
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
-        query: `SELECT ${adsGroupCompulsoryMetrics}, ad_group.id, ad_group.name FROM ad_group WHERE customer.id = ${customerId}`,
+        query,
       },
       {
         headers: {
@@ -334,11 +361,20 @@ exports.fetchSingleAdsGroupDetails = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${adsGroupCompulsoryMetrics}, ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
     // Fetch single ad group by id
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
-        query: `SELECT ${adsGroupCompulsoryMetrics}, ad_group.id, ad_group.name FROM ad_group WHERE ad_group.id = ${adGroupId}`,
+        query,
       },
       {
         headers: {
@@ -400,11 +436,20 @@ exports.fetchAllAdsAgainstCustomer = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
+    const { dateFilter } = req.body;
+
+    let query = `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE customer.id = ${customerId}`;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
+
     // Fetch all ads by customer id
     const response = await googleAdsApiBaseUrl.post(
       `/customers/${customerId}/googleAds:search`,
       {
-        query: `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE customer.id = ${customerId}`,
+        query,
       },
       {
         headers: {
@@ -452,7 +497,14 @@ exports.fetchAdAgainstAdId = async (req, res) => {
     // Fetch the latest access token.
     const token = await fetchLatestAccessToken(customerRefreshToken);
 
-    const query = `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE ad_group_ad.ad.id = ${adId}`;
+    let query = `SELECT ${allAdsCompulsoryMtrics}, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group.campaign, ad_group.id, ad_group.name, campaign.id, campaign.name FROM ad_group_ad WHERE ad_group_ad.ad.id = ${adId}`;
+
+    const { dateFilter } = req.body;
+
+    // Date Fromat should be YYYY-MM-DD
+    if (dateFilter) {
+      query = `${query} AND segments.date BETWEEN '${dateFilter.startDate}' AND '${dateFilter.endDate}'`;
+    }
 
     // Fetch single ad by id
     const response = await googleAdsApiBaseUrl.post(
