@@ -7,6 +7,14 @@ const {
   googleClientSecret,
   googleRedirectUri,
 } = require("../config");
+const {
+  fetchAllGoogleAdsCustomers,
+  getAllCompaignsAgainstCustomer,
+  getMetricsAgainstSingleCompaign,
+  fetchAllAdsGroupsAgainstCustomer,
+  fetchSingleAdsGroupDetails,
+  fetchAllAdsAgainstCustomer,
+} = require("../controllers/googleAdsApi");
 
 // Initialize OAuth2Client with your credentials
 const oauth2Client = new OAuth2Client({
@@ -48,5 +56,23 @@ router.get("/auth/callback", async (req, res) => {
     res.redirect("/login");
   }
 });
+
+// Fetch all customer google ads
+router.get("/customers", fetchAllGoogleAdsCustomers);
+
+// Fetch compaigns against customer
+router.get("/customer/compaigns", getAllCompaignsAgainstCustomer);
+
+// Fetch metrics against single compaign
+router.get("/single-compaign-metrics", getMetricsAgainstSingleCompaign);
+
+// Fetch all Ads Group
+router.get("/ads-groups", fetchAllAdsGroupsAgainstCustomer);
+
+// Fetch single Ads Group
+router.get("/single-ads-group-metrics", fetchSingleAdsGroupDetails);
+
+// Fetch all ads
+router.get("/fetch-all-ads", fetchAllAdsAgainstCustomer);
 
 module.exports = router;
