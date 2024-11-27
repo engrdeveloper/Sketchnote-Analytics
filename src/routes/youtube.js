@@ -4,6 +4,7 @@ const { google } = require("googleapis");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 const {
   googleClientId,
@@ -17,11 +18,6 @@ const oauth2Client = new google.auth.OAuth2(
   googleClientSecret,
   googleRedirectUri
 );
-
-const multer = require("multer");
-const { Readable } = require("stream");
-
-const upload = multer(); // No disk storage
 
 // YouTube Data API client
 const youtube = google.youtube({
@@ -55,9 +51,16 @@ router.get("/auth", (req, res) => {
 });
 
 // Function to save tokens securely
-function saveTokens(tokens) {
-  const tokenPath = path.resolve(__dirname, "../tokens.json");
-  fs.writeFileSync(tokenPath, JSON.stringify(tokens));
+function saveTokens(tokens, channelINfo) {
+  try {
+    const tokenPath = path.resolve(__dirname, "../tokens.json");
+    fs.writeFileSync(tokenPath, JSON.stringify(tokens));
+
+    const channelInfoPath = path.resolve(__dirname, "../channelInfo.json");
+    fs.writeFileSync(channelInfoPath, JSON.stringify(channelINfo));
+  } catch (err) {
+    console.error("Error saving tokens:", err.message);
+  }
 }
 
 // OAuth 2.0 callback route after authentication
@@ -79,9 +82,7 @@ router.get("/auth/callback", async (req, res) => {
 
     const refreshToken = tokens.refresh_token;
 
-    console.log("Refresh token:", refreshToken);
-
-    saveTokens(tokens);
+    saveTokens(tokens, channelInfo);
 
     res.send({
       success: true,
@@ -98,24 +99,209 @@ router.get("/auth/callback", async (req, res) => {
     });
   }
 });
-
-// Function to set the thumbnail for a video
-async function setThumbnail(videoId, thumbnailPath) {
+async function getFileSizeFromUrl(fileUrl) {
   try {
-    const response = await youtube.thumbnails.set({
-      videoId: videoId,
-      media: {
-        body: fs.createReadStream(thumbnailPath),
+    // Perform a HEAD request to get headers only (no response body)
+    const response = await axios.head(fileUrl);
+
+    // check the response file type
+    const contentType = response.headers["content-type"];
+
+    // Get the file size from the 'Content-Length' header
+    const fileSize = response.headers["content-length"];
+
+    // Return the file size in bytes
+    return { fileSize, mimeType: contentType };
+  } catch (error) {
+    console.error("Error getting file size from URL:", error.message);
+    throw error; // Rethrow error if needed
+  }
+}
+
+// Function to start resumable upload session
+async function startResumableSession(fileSize, mimeType) {
+  const tokens = loadTokens();
+
+  if (tokens) {
+    oauth2Client.setCredentials(tokens);
+  } else {
+    console.error("No tokens found! Authenticate the user first.");
+  }
+
+  // // Get user's YouTube account information
+  // const response = await youtube.channels.list({
+  //   part: "snippet,statistics",
+  //   mine: true, // Fetch details of the authenticated user's channel
+  // });
+
+  // console.log("Channel Information", response.data.items);
+
+  accessToken = oauth2Client.credentials.access_token;
+
+  console.log("Access Token", accessToken);
+
+  const url =
+    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status";
+
+  const videoMetadata = {
+    snippet: {
+      title: "My Video Title for chunk uploading",
+      description: "Description of the video for chunk uploading",
+    },
+    status: {
+      privacyStatus: "private",
+    },
+  };
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json; charset=UTF-8",
+    "X-Upload-Content-Length": fileSize,
+    "X-Upload-Content-Type": mimeType,
+  };
+
+  try {
+    const response = await axios.post(url, videoMetadata, { headers });
+    return response.headers.location;
+  } catch (error) {
+    console.error(
+      "Error starting resumable session:",
+      error?.response?.data?.error
+    );
+  }
+}
+
+// Function to upload the video in chunks
+async function uploadVideoInChunks(uploadUrl, videoUrl, fileSize, mimeType) {
+  const chunkSize = 8 * 1024 * 1024; // 8MB per chunk and multiple of 256KB
+  let startByte = 0;
+  let endByte = Math.min(chunkSize - 1, fileSize - 1);
+
+  console.log("Uploading video in chunks...");
+
+  // Loop through the video in chunks
+  while (startByte < fileSize) {
+    const chunk = await downloadChunk(videoUrl, startByte, endByte);
+    console.log("Chunk Downloaded:", chunk);
+
+    const tokens = loadTokens();
+
+    if (tokens) {
+      oauth2Client.setCredentials(tokens);
+    } else {
+      console.error("No tokens found! Authenticate the user first.");
+    }
+
+    // Set the upload headers
+    const headers = {
+      Authorization: `Bearer ${oauth2Client.credentials.access_token}`,
+      "Content-Length": chunk.length,
+      "Content-Type": mimeType,
+      "Content-Range": `bytes ${startByte}-${endByte}/${fileSize}`,
+    };
+
+    try {
+      console.log("Uploading chunk from", startByte, "to", endByte);
+      const uploadResponse = await axios
+        .put(uploadUrl, chunk, { headers })
+        .catch((error) => {
+          console.error("Error uploading chunk:");
+        });
+      console.log(
+        `Uploaded chunk ${startByte} to ${endByte}, ${uploadResponse?.status}`
+      );
+
+      console.log("response", uploadResponse?.data);
+      console.log("responsestatus", uploadResponse?.status);
+
+      startByte = endByte + 1;
+      endByte = Math.min(startByte + chunkSize - 1, fileSize - 1);
+    } catch (error) {
+      console.error("Error uploading chunk:", error);
+      break;
+    }
+  }
+}
+
+// Function to download a specific chunk of the video
+async function downloadChunk(videoUrl, startByte, endByte) {
+  try {
+    console.log(`Downloading chunk from ${startByte} to ${endByte}`);
+    const response = await axios.get(videoUrl, {
+      responseType: "arraybuffer",
+      headers: {
+        Range: `bytes=${startByte}-${endByte}`,
       },
     });
 
-    console.log("Thumbnail set successfully!", response.data);
+    return response.data; // Return the chunk data (as a Buffer)
+  } catch (error) {
+    console.error(
+      `Error downloading chunk from ${startByte} to ${endByte}:`,
+      error.message
+    );
+    throw error;
+  }
+}
+
+// Example usage
+async function uploadLargeVideo(videoUrl) {
+  const { fileSize, mimeType } = await getFileSizeFromUrl(videoUrl);
+  console.log({ fileSize, mimeType });
+
+  const uploadUrl = await startResumableSession(fileSize, mimeType);
+  console.log("Resumable Upload URL:", uploadUrl);
+
+  if (uploadUrl) {
+    await uploadVideoInChunks(uploadUrl, videoUrl, fileSize, mimeType);
+  }
+}
+
+// Example usage: Replace with your video URL:
+
+// short size video: http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4
+// uploadLargeVideo(
+//   "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+// );
+
+async function setThumbnail(videoId, thumbnailUrl) {
+  try {
+    // Fetch the image from the URL
+    const response = await axios.get(thumbnailUrl, { responseType: "stream" });
+
+    const tokens = loadTokens();
+    if (tokens) {
+      oauth2Client.setCredentials(tokens);
+    } else {
+      return console.error("No tokens found! Authenticate the user first.");
+    }
+
+    // Get user's YouTube account information
+    const response1 = await youtube.channels.list({
+      part: "snippet,statistics",
+      mine: true, // Fetch details of the authenticated user's channel
+    });
+
+    console.log("Channel Information", response1.data.items);
+
+    // Set the thumbnail using YouTube API
+    const youtubeResponse = await youtube.thumbnails.set({
+      videoId: videoId,
+      media: {
+        body: response.data, // Send the image data as the body
+      },
+    });
+
+    console.log("Thumbnail set successfully!", youtubeResponse.data);
   } catch (err) {
     console.error("Error setting thumbnail:", err.message);
   }
 }
 
-
+// setThumbnail(
+//   "XJ85VUBw21U",
+//   "https://raw.githubusercontent.com/neutraltone/awesome-stock-resources/master/img/splash.jpg"
+// );
 // http://localhost:4000/apis/youtube/auth
 async function uploadVideo(
   videoPath,
@@ -172,7 +358,8 @@ function loadTokens() {
   return null;
 }
 
-const testing = async () => {
+// Route to upload video
+router.post("/upload", async (req, res) => {
   try {
     // Load tokens and set credentials
     const tokens = loadTokens();
@@ -181,101 +368,15 @@ const testing = async () => {
     } else {
       console.error("No tokens found! Authenticate the user first.");
     }
-    const videoPath =
-      "/home/sohaib/Desktop/Projects/sketchnotes/Sketchnote-Analytics/testing.mp4"; // Replace with the path to your video
-    const videoId = await uploadVideo(
-      videoPath,
-      "The video's title. The property value has a maximum length of 100 characters and may contain all va ",
-      "Sample Description Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.Sample Description Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. Sample Description Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.Sample Description Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum. #testing #checkme",
-      "unlisted", // Privacy: 'public', 'private', or '  ',
-      false
-    );
 
-    console.log("Video uploaded successfully!", videoId);
-
-    setThumbnail(
+    res.status(200).json({
+      message: "Video and thumbnail uploaded successfully",
       videoId,
-      "/home/sohaib/Desktop/Projects/sketchnotes/Sketchnote-Analytics/testing.png"
-    );
-  } catch (err) {
-    console.error("Error:", err.message);
+    });
+  } catch (error) {
+    console.error("Error uploading video:", error.message);
+    res.status(500).json({ error: "Failed to upload video" });
   }
-};
-// testing()
-
-// Route to upload video
-router.post(
-  "/upload",
-  upload.fields([{ name: "video" }, { name: "thumbnail" }]),
-  async (req, res) => {
-    try {
-      // Load tokens and set credentials
-      const tokens = loadTokens();
-      if (tokens) {
-        oauth2Client.setCredentials(tokens);
-      } else {
-        console.error("No tokens found! Authenticate the user first.");
-      }
-      const videoFile = req.files.video[0];
-      const thumbnailFile = req.files.thumbnail[0];
-
-      // Upload video
-      const videoStream = Readable.from(videoFile.buffer);
-
-      const videoDetails = {
-        snippet: {
-          title: "test",
-          description: "sample direct uplaod",
-        },
-        status: {
-          privacyStatus: "private",
-          selfDeclaredMadeForKids: true,
-        },
-      };
-
-      const fileSize = videoFile.buffer.length;
-
-      const videoResponse = await youtube.videos.insert(
-        {
-          part: "snippet,status",
-          requestBody: videoDetails,
-          media: {
-            body: videoStream,
-          },
-        },
-        {
-          maxBodyLength: Infinity, // Allow large files
-          maxContentLength: Infinity, // Allow large files
-          // This handles upload progress.
-          onUploadProgress: (evt) => {
-            const progress = (evt.bytesRead / fileSize) * 100;
-            console.log(`${Math.round(progress)}% complete`);
-          },
-        }
-      );
-
-      const videoId = videoResponse.data.id;
-      console.log(`Video uploaded successfully with ID: ${videoId}`);
-
-      // Upload thumbnail
-      const thumbnailStream = Readable.from(thumbnailFile.buffer);
-      await youtube.thumbnails.set({
-        videoId,
-        media: {
-          body: thumbnailStream,
-        },
-      });
-
-      console.log("Thumbnail uploaded successfully");
-      res.status(200).json({
-        message: "Video and thumbnail uploaded successfully",
-        videoId,
-      });
-    } catch (error) {
-      console.error("Error uploading video:", error.message);
-      res.status(500).json({ error: "Failed to upload video" });
-    }
-  }
-);
+});
 
 module.exports = router;
