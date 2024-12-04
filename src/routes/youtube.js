@@ -119,39 +119,16 @@ async function getFileSizeFromUrl(fileUrl) {
 }
 
 // Function to start resumable upload session
-async function startResumableSession(fileSize, mimeType) {
-  const tokens = loadTokens();
-
-  if (tokens) {
-    oauth2Client.setCredentials(tokens);
-  } else {
-    console.error("No tokens found! Authenticate the user first.");
-  }
-
-  // // Get user's YouTube account information
-  // const response = await youtube.channels.list({
-  //   part: "snippet,statistics",
-  //   mine: true, // Fetch details of the authenticated user's channel
-  // });
-
-  // console.log("Channel Information", response.data.items);
-
-  accessToken = oauth2Client.credentials.access_token;
-
+async function startResumableSession(
+  accessToken,
+  videoMetaData,
+  fileSize,
+  mimeType
+) {
   console.log("Access Token", accessToken);
 
   const url =
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status";
-
-  const videoMetadata = {
-    snippet: {
-      title: "My Video Title for chunk uploading",
-      description: "Description of the video for chunk uploading",
-    },
-    status: {
-      privacyStatus: "private",
-    },
-  };
 
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -161,52 +138,48 @@ async function startResumableSession(fileSize, mimeType) {
   };
 
   try {
-    const response = await axios.post(url, videoMetadata, { headers });
+    const response = await axios.post(url, videoMetaData, { headers });
     return response.headers.location;
   } catch (error) {
-    console.error(
-      "Error starting resumable session:",
-      error?.response?.data?.error
-    );
+    console.error("Error starting resumable session:", error?.response?.data);
+    throw error;
   }
 }
 
 // Function to upload the video in chunks
-async function uploadVideoInChunks(uploadUrl, videoUrl, fileSize, mimeType) {
-  const chunkSize = 8 * 1024 * 1024; // 8MB per chunk and multiple of 256KB
-  let startByte = 0;
-  let endByte = Math.min(chunkSize - 1, fileSize - 1);
+async function uploadVideoInChunks(
+  accessToken,
+  uploadUrl,
+  videoUrl,
+  fileSize,
+  mimeType
+) {
+  try {
+    console.log("Uploading video in chunks...");
 
-  console.log("Uploading video in chunks...");
+    const chunkSize = 10 * 1024 * 1024; // 10MB per chunk and multiple of 256KB
+    let startByte = 0;
+    let endByte = Math.min(chunkSize - 1, fileSize - 1);
 
-  // Loop through the video in chunks
-  while (startByte < fileSize) {
-    const chunk = await downloadChunk(videoUrl, startByte, endByte);
-    console.log("Chunk Downloaded:", chunk);
+    console.log("Uploading video in chunks...");
+    let videoId;
 
-    const tokens = loadTokens();
+    // Loop through the video in chunks
+    while (startByte < fileSize) {
+      const chunk = await downloadChunk(videoUrl, startByte, endByte);
+      console.log("Chunk Downloaded:", chunk);
 
-    if (tokens) {
-      oauth2Client.setCredentials(tokens);
-    } else {
-      console.error("No tokens found! Authenticate the user first.");
-    }
+      // Set the upload headers
+      const headers = {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Length": chunk.length,
+        "Content-Type": mimeType,
+        "Content-Range": `bytes ${startByte}-${endByte}/${fileSize}`,
+      };
 
-    // Set the upload headers
-    const headers = {
-      Authorization: `Bearer ${oauth2Client.credentials.access_token}`,
-      "Content-Length": chunk.length,
-      "Content-Type": mimeType,
-      "Content-Range": `bytes ${startByte}-${endByte}/${fileSize}`,
-    };
-
-    try {
       console.log("Uploading chunk from", startByte, "to", endByte);
-      const uploadResponse = await axios
-        .put(uploadUrl, chunk, { headers })
-        .catch((error) => {
-          console.error("Error uploading chunk:");
-        });
+      const uploadResponse = await axios.put(uploadUrl, chunk, { headers });
+
       console.log(
         `Uploaded chunk ${startByte} to ${endByte}, ${uploadResponse?.status}`
       );
@@ -214,12 +187,18 @@ async function uploadVideoInChunks(uploadUrl, videoUrl, fileSize, mimeType) {
       console.log("response", uploadResponse?.data);
       console.log("responsestatus", uploadResponse?.status);
 
+      if (uploadResponse?.status === 200) {
+        videoId = uploadResponse?.data?.id;
+      }
+
       startByte = endByte + 1;
       endByte = Math.min(startByte + chunkSize - 1, fileSize - 1);
-    } catch (error) {
-      console.error("Error uploading chunk:", error);
-      break;
     }
+
+    return videoId;
+  } catch (error) {
+    console.error("Error uploading video in chunks:", error.message);
+    throw error;
   }
 }
 
@@ -244,31 +223,110 @@ async function downloadChunk(videoUrl, startByte, endByte) {
   }
 }
 
-// Example usage
-async function uploadLargeVideo(videoUrl) {
-  const { fileSize, mimeType } = await getFileSizeFromUrl(videoUrl);
-  console.log({ fileSize, mimeType });
-
-  const uploadUrl = await startResumableSession(fileSize, mimeType);
-  console.log("Resumable Upload URL:", uploadUrl);
-
-  if (uploadUrl) {
-    await uploadVideoInChunks(uploadUrl, videoUrl, fileSize, mimeType);
+function loadTokens() {
+  const tokenPath = path.resolve(__dirname, "../tokens.json");
+  if (fs.existsSync(tokenPath)) {
+    const tokens = JSON.parse(fs.readFileSync(tokenPath, "utf-8"));
+    return tokens;
   }
+  return null;
 }
 
-// Example usage: Replace with your video URL:
-
-// short size video: http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4
-// uploadLargeVideo(
-//   "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
-// );
-
-async function setThumbnail(videoId, thumbnailUrl) {
+// Route to upload video
+router.post("/upload", async (req, res) => {
   try {
-    // Fetch the image from the URL
-    const response = await axios.get(thumbnailUrl, { responseType: "stream" });
+    // check the body parameters
+    const {
+      videoPath,
+      title,
+      description,
+      privacyStatus,
+      madeForKids = false,
+      scheduleDate,
+      thumbnailUrl,
+    } = req.body;
 
+    // check for missing parameters
+    if (!videoPath || !title || !description || !privacyStatus) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    // Checking the video parameters as per the link
+    // https://developers.google.com/youtube/v3/docs/videos#resource
+
+    // The video's title. The property value has a maximum length of 100 characters and may contain all valid UTF-8 characters except < and >.
+    if (title.length > 100) {
+      return res.status(400).json({ error: "Title too long" });
+    }
+
+    // check for <> characters
+    if (title.includes("<") || title.includes(">")) {
+      return res.status(400).json({ error: "Title contains <> characters" });
+    }
+
+    // The video's description. The property value has a maximum length of 1000 characters and may contain all valid UTF-8 characters except < and >.
+    if (description.length > 1000) {
+      return res.status(400).json({ error: "Description too long" });
+    }
+
+    // check for <> characters
+    if (description.includes("<") || description.includes(">")) {
+      return res
+        .status(400)
+        .json({ error: "Description contains <> characters" });
+    }
+
+    // check for invalid privacy status
+    if (!["public", "private", "unlisted"].includes(privacyStatus)) {
+      return res.status(400).json({
+        error: "Invalid privacy status, Valid: public, private, unlisted",
+      });
+    }
+
+    // check if thumbnail url is valid and its length is less then 2Mb
+    if (thumbnailUrl) {
+      try {
+        const response = await axios.head(thumbnailUrl);
+        const fileSize = response.headers["content-length"];
+        // check if the file size is greater then 2MB
+        // https://developers.google.com/youtube/v3/docs/thumbnails/set
+        if (fileSize > 2 * 1024 * 1024) {
+          return res.status(400).json({ error: "Thumbnail size too large" });
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Invalid thumbnail URL" });
+      }
+    }
+
+    const videoMetaData = {
+      snippet: {
+        title,
+        description,
+      },
+      status: {
+        privacyStatus,
+        selfDeclaredMadeForKids: madeForKids,
+      },
+    };
+
+    if (scheduleDate) {
+      // check if the date is valid
+      const date = new Date(scheduleDate);
+      if (isNaN(date.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+
+      // check if the date is in the future
+      if (date.getTime() < Date.now()) {
+        return res.status(400).json({ error: "Past date not allowed" });
+      }
+      // convert the date to ISO format
+      const isoFormatDate = date.toISOString();
+
+      videoMetaData.status.publishAt = isoFormatDate;
+    }
+
+    // Load tokens and set credentials
     const tokens = loadTokens();
     if (tokens) {
       oauth2Client.setCredentials(tokens);
@@ -276,13 +334,51 @@ async function setThumbnail(videoId, thumbnailUrl) {
       return console.error("No tokens found! Authenticate the user first.");
     }
 
-    // Get user's YouTube account information
-    const response1 = await youtube.channels.list({
-      part: "snippet,statistics",
-      mine: true, // Fetch details of the authenticated user's channel
-    });
+    const accessToken = tokens.access_token;
+    const { fileSize, mimeType } = await getFileSizeFromUrl(videoPath);
 
-    console.log("Channel Information", response1.data.items);
+    const uploadUrl = await startResumableSession(
+      accessToken,
+      videoMetaData,
+      fileSize,
+      mimeType
+    );
+    console.log("Resumable Upload URL:", uploadUrl);
+
+    let videoId;
+    if (uploadUrl) {
+      videoId = await uploadVideoInChunks(
+        accessToken,
+        uploadUrl,
+        videoPath,
+        fileSize,
+        mimeType
+      );
+    }
+
+    // Set the thumbnail
+    if (thumbnailUrl) {
+      await setYouTubeThumbnail(accessToken, videoId, thumbnailUrl);
+    }
+
+    res.status(200).json({
+      message: "Video and thumbnail uploaded successfully",
+      videoId,
+    });
+  } catch (error) {
+    console.error("Error uploading video:", error.message);
+    res.status(500).json({ error: "Failed to upload video" });
+  }
+});
+
+async function setYouTubeThumbnail(accessToken, videoId, thumbnailUrl) {
+  try {
+    // Fetch the image from the URL
+    const response = await axios.get(thumbnailUrl, { responseType: "stream" });
+
+    oauth2Client.setCredentials({
+      access_token: accessToken,
+    });
 
     // Set the thumbnail using YouTube API
     const youtubeResponse = await youtube.thumbnails.set({
@@ -297,86 +393,5 @@ async function setThumbnail(videoId, thumbnailUrl) {
     console.error("Error setting thumbnail:", err.message);
   }
 }
-
-// setThumbnail(
-//   "XJ85VUBw21U",
-//   "https://raw.githubusercontent.com/neutraltone/awesome-stock-resources/master/img/splash.jpg"
-// );
-// http://localhost:4000/apis/youtube/auth
-async function uploadVideo(
-  videoPath,
-  title,
-  description,
-  privacyStatus,
-  madeForKids = false
-) {
-  const date = new Date();
-  date.setMinutes(date.getMinutes() + 2);
-  const isoFormat = date.toISOString();
-
-  const videoDetails = {
-    snippet: {
-      title,
-      description,
-    },
-    status: {
-      privacyStatus,
-      selfDeclaredMadeForKids: madeForKids,
-      // publishAt: isoFormat,
-    },
-  };
-
-  const fileSize = fs.statSync(videoPath).size;
-
-  const response = await youtube.videos.insert(
-    {
-      part: "snippet,status",
-      requestBody: videoDetails,
-      media: {
-        body: fs.createReadStream(videoPath),
-      },
-    },
-    {
-      // This handles upload progress.
-      onUploadProgress: (evt) => {
-        const progress = (evt.bytesRead / fileSize) * 100;
-        console.log(`${Math.round(progress)}% complete`);
-      },
-    }
-  );
-
-  console.log("Upload successful! Video ID:", response.data.id);
-  return response.data.id;
-}
-
-function loadTokens() {
-  const tokenPath = path.resolve(__dirname, "../tokens.json");
-  if (fs.existsSync(tokenPath)) {
-    const tokens = JSON.parse(fs.readFileSync(tokenPath, "utf-8"));
-    return tokens;
-  }
-  return null;
-}
-
-// Route to upload video
-router.post("/upload", async (req, res) => {
-  try {
-    // Load tokens and set credentials
-    const tokens = loadTokens();
-    if (tokens) {
-      oauth2Client.setCredentials(tokens);
-    } else {
-      console.error("No tokens found! Authenticate the user first.");
-    }
-
-    res.status(200).json({
-      message: "Video and thumbnail uploaded successfully",
-      videoId,
-    });
-  } catch (error) {
-    console.error("Error uploading video:", error.message);
-    res.status(500).json({ error: "Failed to upload video" });
-  }
-});
 
 module.exports = router;
