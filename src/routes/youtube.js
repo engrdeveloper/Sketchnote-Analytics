@@ -39,6 +39,7 @@ router.get("/auth", (req, res) => {
       // scopes https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#identify-access-scopes
       "https://www.googleapis.com/auth/youtube.readonly", // Read YouTube account info
       "https://www.googleapis.com/auth/youtube.upload", // Upload videos to YouTube
+      "https://www.googleapis.com/auth/youtube.force-ssl", //See, edit, and permanently delete your YouTube videos, ratings, comments and captions
     ],
     // Enable incremental authorization. Recommended as a best practice.
     include_granted_scopes: true,
@@ -125,8 +126,6 @@ async function startResumableSession(
   fileSize,
   mimeType
 ) {
-  console.log("Access Token", accessToken);
-
   const url =
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status";
 
@@ -370,6 +369,80 @@ router.post("/upload", async (req, res) => {
     res.status(500).json({ error: "Failed to upload video" });
   }
 });
+
+async function updateYouTubeVideo(videoId, title, description, privacyStatus) {
+  const tokens = loadTokens();
+  if (!tokens) {
+    console.error("No tokens found! Authenticate the user first.");
+    return;
+  }
+  oauth2Client.setCredentials(tokens);
+
+  try {
+    // Fetch current video details
+    const videoDetails = await youtube.videos.list({
+      part: "snippet",
+      id: videoId,
+    });
+
+    if (!videoDetails.data.items.length) {
+      console.error("Video not found!");
+      return;
+    }
+
+    const currentCategoryId = videoDetails.data.items[0].snippet.categoryId;
+    const date= new Date();
+    date.setMinutes(date.getMinutes() + 5);
+
+    // Update video
+    const response = await youtube.videos.update({
+      part: "snippet,status",
+      requestBody: {
+        id: videoId,
+        snippet: {
+          title: title || "Updated Title",
+          description: description || "Updated Description",
+          categoryId: currentCategoryId, // Include valid categoryId
+        },
+        status: {
+          privacyStatus: privacyStatus || "public",
+          selfDeclaredMadeForKids: false,
+          publishAt: date.toISOString(),
+
+        },
+      },
+    });
+
+    console.log("Video updated successfully:", response.data);
+  } catch (error) {
+    console.error("Error updating video:", error.response?.data?.error);
+  }
+}
+
+// Call the function with video details
+// updateYouTubeVideo("woQ07hOU75Q", "New Title", "New Description", "private");
+
+async function deleteYouTubeVideo(videoId) {
+  const tokens = loadTokens();
+  if (tokens) {
+    oauth2Client.setCredentials(tokens);
+  } else {
+    console.error("No tokens found! Authenticate the user first.");
+    return;
+  }
+
+  try {
+    const response = await youtube.videos.delete({
+      id: videoId,  // Video ID of the video you want to delete
+    });
+
+    console.log("Video deleted successfully:", response.data);
+  } catch (error) {
+    console.error("Error deleting video:", error.response.data?.error);
+  }
+}
+
+// deleteYouTubeVideo("woQ07hOU75Q");
 
 async function setYouTubeThumbnail(accessToken, videoId, thumbnailUrl) {
   try {
